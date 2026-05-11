@@ -45,6 +45,31 @@ behaviour, distribution quirks, and platform-specific edge cases.
 
 Common issues encountered during development and how to resolve them.
 
+## Hostname resolution crashes on iOS
+
+**Symptom:** Calling `:inet.getaddr/2`, or passing a hostname/charlist such as
+`~c"example.com"` to `:gen_tcp.connect/4`, crashes the on-device BEAM. The crash
+dump may include:
+
+```
+Can not execute .../erts-*/bin/inet_gethost : badarg
+```
+
+**Cause:** OTP's native hostname resolver can use the `inet_gethost` helper
+program. iOS app bundles cannot rely on spawning that helper from the embedded
+runtime, so the port-program resolver path is not safe inside an iOS app.
+
+**Fix:** Resolve through Mob's platform resolver first, then pass the returned
+IPv4 tuple to OTP socket APIs:
+
+```elixir
+{:ok, ip} = Mob.Net.resolve_ipv4("api.internal")
+:gen_tcp.connect(ip, 8000, [:binary, active: false], 5_000)
+```
+
+`Mob.Net.resolve_ipv4/1` uses the platform DNS stack on iOS and Android and
+falls back to `:inet.getaddr/2` in non-native environments.
+
 ## Elixir or Hex version too old
 
 **Symptom:** `mix deps.get` or `mix mob.install` fails with errors like

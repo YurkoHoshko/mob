@@ -134,9 +134,13 @@ def handle_info({:location, %{lat: lat, lon: lon}}, socket), do: ...
 # Push notifications
 Mob.Notify.register_push(socket)
 def handle_info({:push_token, :ios, token}, socket), do: ...
+
+# DNS / host resolution before opening a socket
+{:ok, ip} = Mob.Net.resolve_ipv4("api.internal")
+:gen_tcp.connect(ip, 8000, [:binary, active: false], 5_000)
 ```
 
-Also: `Mob.Clipboard`, `Mob.Share`, `Mob.Photos`, `Mob.Files`, `Mob.Audio`, `Mob.Motion`, `Mob.Biometric`, `Mob.Scanner`, `Mob.Permissions`.
+Also: `Mob.Clipboard`, `Mob.Share`, `Mob.Photos`, `Mob.Files`, `Mob.Audio`, `Mob.Motion`, `Mob.Biometric`, `Mob.Scanner`, `Mob.Permissions`, `Mob.Net`.
 
 ## What's in the box
 

@@ -40,6 +40,8 @@ defmodule Mob.MixProject do
           # Mob.Test diagnostic API surface — IEx-driven, no internal
           # caller in mob itself.
           {~r/^Mob\.Test$/, :_, :_},
+          # Mob.Net is a public device API for app code.
+          {~r/^Mob\.Net$/, :_, :_},
           # Theme accessors — used by user apps via Mob.Theme.<name>.
           {~r/^Mob\.Theme\..+/, :_, :_}
         ]
@@ -111,7 +113,8 @@ defmodule Mob.MixProject do
           Mob.Audio,
           Mob.Motion,
           Mob.Scanner,
-          Mob.Notify
+          Mob.Notify,
+          Mob.Net
         ],
         "Testing & Debugging": [Mob.Test],
         Tooling: [Mob.Formatter],
