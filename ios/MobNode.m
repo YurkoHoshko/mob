@@ -13,6 +13,7 @@
         _paddingRight  = -1.0;
         _paddingBottom = -1.0;
         _paddingLeft   = -1.0;
+        _gap           = 0.0;
         _fontWeight    = @"regular";
         _textAlign     = @"left";
         _italic        = NO;

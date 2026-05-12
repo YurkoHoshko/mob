@@ -218,7 +218,7 @@ struct MobNodeView: View {
         Group {
             switch node.nodeType {
             case .column:
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: CGFloat(node.gap)) {
                     ForEach(Array(node.childNodes.enumerated()), id: \.offset) { _, child in MobNodeView(node: child) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -237,7 +237,7 @@ struct MobNodeView: View {
                     default:       return .center
                     }
                 }()
-                HStack(alignment: alignment, spacing: 0) {
+                HStack(alignment: alignment, spacing: CGFloat(node.gap)) {
                     ForEach(Array(node.childNodes.enumerated()), id: \.offset) { _, child in MobNodeView(node: child) }
                 }
                 // Without maxWidth: .infinity an HStack hugs its content.
@@ -316,12 +316,12 @@ struct MobNodeView: View {
                 let axes: Axis.Set = isHorizontal ? .horizontal : .vertical
                 ScrollView(axes, showsIndicators: node.showIndicator) {
                     if isHorizontal {
-                        HStack(alignment: .top, spacing: 0) {
+                        HStack(alignment: .top, spacing: CGFloat(node.gap)) {
                             ForEach(Array(node.childNodes.enumerated()), id: \.offset) { _, child in MobNodeView(node: child) }
                         }
                         .frame(maxHeight: .infinity, alignment: .topLeading)
                     } else {
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: CGFloat(node.gap)) {
                             ForEach(Array(node.childNodes.enumerated()), id: \.offset) { _, child in MobNodeView(node: child) }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -342,6 +342,10 @@ struct MobNodeView: View {
                 let placeholder = node.placeholder ?? ""
                 let initialText = node.text ?? ""
                 MobTextField(node: node, placeholder: placeholder, initialText: initialText)
+
+            case .datePicker:
+                let initialText = node.text ?? ""
+                MobDatePicker(node: node, initialText: initialText)
                     .padding(node.paddingEdgeInsets)
 
             case .toggle:
@@ -377,7 +381,7 @@ struct MobNodeView: View {
 
             case .lazyList:
                 ScrollView(.vertical, showsIndicators: true) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
+                    LazyVStack(alignment: .leading, spacing: CGFloat(node.gap)) {
                         ForEach(Array(node.childNodes.enumerated()), id: \.offset) { index, child in
                             MobNodeView(node: child)
                                 .onAppear {
@@ -475,25 +479,47 @@ private struct MobBox: View {
             }
         }
 
-        return Group {
+        let framed: AnyView = {
             if node.fixedWidth > 0 {
-                stack.frame(
-                    width: CGFloat(node.fixedWidth),
-                    height: node.fixedHeight > 0 ? CGFloat(node.fixedHeight) : nil,
-                    alignment: alignment
+                if node.fixedHeight > 0 {
+                    return AnyView(
+                        stack.frame(
+                            width: CGFloat(node.fixedWidth),
+                            height: CGFloat(node.fixedHeight),
+                            alignment: alignment
+                        )
+                    )
+                } else {
+                    return AnyView(
+                        stack.frame(
+                            width: CGFloat(node.fixedWidth),
+                            alignment: alignment
+                        )
+                    )
+                }
+            } else if node.fixedHeight > 0 {
+                return AnyView(
+                    stack
+                        .frame(maxWidth: .infinity, alignment: alignment)
+                        .frame(height: CGFloat(node.fixedHeight), alignment: alignment)
                 )
             } else if node.fillHeight {
                 // fill_height: true is what lets a wrapping box stretch to the
                 // viewport so center alignment lands on the visible midpoint
                 // (e.g. for floating dialogs that need to sit mid-screen
                 // regardless of their sibling's content size).
-                stack.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment)
+                return AnyView(stack.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: alignment))
             } else {
-                stack.frame(maxWidth: .infinity, alignment: alignment)
+                return AnyView(stack.frame(maxWidth: .infinity, alignment: alignment))
             }
-        }
+        }()
+
+        return framed
         .padding(node.paddingEdgeInsets)
-        .background(node.backgroundColor.map { Color($0) } ?? Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: node.cornerRadius)
+                .fill(node.backgroundColor.map { Color($0) } ?? Color.clear)
+        )
         .overlay(
             // Border opt-in via border_color + border_width on the BEAM side.
             // When width is 0 (default) the stroke draws nothing — no perf cost.
@@ -994,7 +1020,12 @@ private struct MobTextField: View {
     }
 
     var body: some View {
-        TextField(placeholder, text: $text)
+        let field = AnyView(TextField(
+            "",
+            text: $text,
+            prompt: Text(placeholder)
+                .foregroundColor(node.placeholderColor.map { Color($0) } ?? Color.secondary)
+        )
             .focused($isFocused)
             .keyboardType(keyboardType)
             .submitLabel(submitLabel)
@@ -1020,8 +1051,23 @@ private struct MobTextField: View {
                     text = newValue
                 }
             }
-            .textFieldStyle(.roundedBorder)
+            .textFieldStyle(.plain)
+            .foregroundColor(node.textColor.map { Color($0) } ?? Color.primary)
+            .tint(node.textColor.map { Color($0) } ?? .accentColor)
+            .padding(node.paddingEdgeInsets)
             .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: node.cornerRadius)
+                    .fill(node.backgroundColor.map { Color($0) } ?? Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: node.cornerRadius)
+                    .stroke(node.borderColor.map { Color($0) } ?? Color.clear,
+                            lineWidth: node.borderWidth)
+                    .allowsHitTesting(false)
+            ))
+
+        field
             // Only contribute keyboard-toolbar items when THIS field is
             // focused. Without the `if isFocused` guard, every MobTextField
             // on the screen contributes its own Done button to the shared
@@ -1034,6 +1080,56 @@ private struct MobTextField: View {
                         Spacer()
                         Button("Done") { isFocused = false }
                     }
+                }
+            }
+    }
+}
+
+private struct MobDatePicker: View {
+    let node: MobNode
+    let initialText: String
+    @State private var date: Date
+    @State private var acceptsUserChanges = false
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    init(node: MobNode, initialText: String) {
+        self.node = node
+        self.initialText = initialText
+        let parsed = Self.formatter.date(from: initialText) ?? Date()
+        _date = State(initialValue: parsed)
+    }
+
+    var body: some View {
+        let selection = Binding<Date>(
+            get: { date },
+            set: { newValue in
+                date = newValue
+                if acceptsUserChanges {
+                    node.onChangeStr?(Self.formatter.string(from: newValue))
+                }
+            }
+        )
+
+        DatePicker("", selection: selection, displayedComponents: .date)
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            .tint(node.textColor.map { Color($0) } ?? .accentColor)
+            .onAppear {
+                DispatchQueue.main.async {
+                    acceptsUserChanges = true
+                }
+            }
+            .onChange(of: initialText) { _, newValue in
+                if let parsed = Self.formatter.date(from: newValue) {
+                    date = parsed
                 }
             }
     }

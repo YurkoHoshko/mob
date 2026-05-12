@@ -26,6 +26,7 @@ typedef NS_ENUM(NSInteger, MobNodeType) {
     MobNodeTypeSpacer,
     MobNodeTypeProgress,
     MobNodeTypeTextField,
+    MobNodeTypeDatePicker,
     MobNodeTypeToggle,
     MobNodeTypeSlider,
     MobNodeTypeImage,
@@ -51,6 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic)                  CGFloat   paddingRight;      // -1 = use uniform padding
 @property (nonatomic)                  CGFloat   paddingBottom;     // -1 = use uniform padding
 @property (nonatomic)                  CGFloat   paddingLeft;       // -1 = use uniform padding
+@property (nonatomic)                  CGFloat   gap;
 
 // Text / Button
 @property (nonatomic, copy,   nullable) NSString* text;

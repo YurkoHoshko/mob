@@ -600,6 +600,7 @@ static MobNode* mob_node_from_dict(NSDictionary* dict) {
     else if ([type isEqualToString:@"spacer"])     node.nodeType = MobNodeTypeSpacer;
     else if ([type isEqualToString:@"progress"])   node.nodeType = MobNodeTypeProgress;
     else if ([type isEqualToString:@"text_field"]) node.nodeType = MobNodeTypeTextField;
+    else if ([type isEqualToString:@"date_picker"]) node.nodeType = MobNodeTypeDatePicker;
     else if ([type isEqualToString:@"toggle"])     node.nodeType = MobNodeTypeToggle;
     else if ([type isEqualToString:@"slider"])     node.nodeType = MobNodeTypeSlider;
     else if ([type isEqualToString:@"image"])      node.nodeType = MobNodeTypeImage;
@@ -617,11 +618,11 @@ static MobNode* mob_node_from_dict(NSDictionary* dict) {
         id text = props[@"text"];
         if (text) node.text = [text isKindOfClass:[NSString class]] ? text : [text description];
 
-        // For text_field, `value:` is the controlled-input prop name (matches
+        // For text_field/date_picker, `value:` is the controlled-input prop name (matches
         // the React/SwiftUI convention used in app code and demos). Map it
-        // to `node.text` so MobTextField sees it as initialText. If both
+        // to `node.text` so input views see it as initialText. If both
         // `text:` and `value:` are passed, `value:` wins.
-        if (node.nodeType == MobNodeTypeTextField) {
+        if (node.nodeType == MobNodeTypeTextField || node.nodeType == MobNodeTypeDatePicker) {
             id valueText = props[@"value"];
             if (valueText) node.text = [valueText isKindOfClass:[NSString class]]
                                        ? valueText
@@ -639,6 +640,9 @@ static MobNode* mob_node_from_dict(NSDictionary* dict) {
         if (paddingBottom) node.paddingBottom = [paddingBottom doubleValue];
         id paddingLeft = props[@"padding_left"];
         if (paddingLeft) node.paddingLeft = [paddingLeft doubleValue];
+
+        id gap = props[@"gap"];
+        if (gap) node.gap = [gap doubleValue];
 
         id textSize = props[@"text_size"];
         if (textSize) node.textSize = [textSize doubleValue];
@@ -1021,6 +1025,9 @@ static MobNode* mob_node_from_dict(NSDictionary* dict) {
             int handle = [onChange intValue];
             switch (node.nodeType) {
                 case MobNodeTypeTextField:
+                    node.onChangeStr = ^(NSString* v) { mob_send_change_str(handle, [v UTF8String]); };
+                    break;
+                case MobNodeTypeDatePicker:
                     node.onChangeStr = ^(NSString* v) { mob_send_change_str(handle, [v UTF8String]); };
                     break;
                 case MobNodeTypeToggle:
