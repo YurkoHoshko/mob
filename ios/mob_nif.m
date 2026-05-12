@@ -32,6 +32,8 @@ extern char *dlerror(void) __attribute__((weak));
 #import <UserNotifications/UserNotifications.h>
 #import <AVFoundation/AVFoundation.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <string.h>
 #include "erl_nif.h"
 #import "MobNode.h"
@@ -1064,6 +1066,51 @@ static ERL_NIF_TERM nif_exit_app(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 
 static ERL_NIF_TERM nif_platform(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
     return enif_make_atom(env, "ios");
+}
+
+// ── NIF: resolve_ipv4/1 ─────────────────────────────────────────────────────
+// Resolve through the platform DNS stack in-process. This gives iOS apps an
+// option that does not rely on OTP's inet_gethost port program.
+
+static ERL_NIF_TERM nif_resolve_ipv4(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]) {
+    if (argc != 1) return enif_make_badarg(env);
+
+    char host[256];
+    ErlNifBinary host_bin;
+    if (enif_inspect_binary(env, argv[0], &host_bin)) {
+        if (host_bin.size == 0 || host_bin.size >= sizeof(host)) {
+            return enif_make_badarg(env);
+        }
+        memcpy(host, host_bin.data, host_bin.size);
+        host[host_bin.size] = '\0';
+    } else if (enif_get_string(env, argv[0], host, sizeof(host), ERL_NIF_LATIN1) <= 0) {
+        return enif_make_badarg(env);
+    }
+
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    struct addrinfo *result = NULL;
+    int rc = getaddrinfo(host, NULL, &hints, &result);
+    if (rc != 0 || result == NULL) {
+        return enif_make_tuple2(env,
+            enif_make_atom(env, "error"),
+            enif_make_string(env, gai_strerror(rc), ERL_NIF_LATIN1));
+    }
+
+    struct sockaddr_in *addr = (struct sockaddr_in *)result->ai_addr;
+    unsigned char *bytes = (unsigned char *)&addr->sin_addr.s_addr;
+    ERL_NIF_TERM tuple = enif_make_tuple4(env,
+        enif_make_uint(env, bytes[0]),
+        enif_make_uint(env, bytes[1]),
+        enif_make_uint(env, bytes[2]),
+        enif_make_uint(env, bytes[3]));
+
+    freeaddrinfo(result);
+
+    return enif_make_tuple2(env, enif_make_atom(env, "ok"), tuple);
 }
 
 // ── NIF: color_scheme/0 ──────────────────────────────────────────────────────
@@ -5074,6 +5121,7 @@ static ErlNifFunc nif_funcs[] = {
     {"device_os_version",     0, nif_device_os_version,     0},
     {"device_model",          0, nif_device_model,          0},
     {"platform",       0, nif_platform,       0},
+    {"resolve_ipv4",   1, nif_resolve_ipv4,   ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"color_scheme",   0, nif_color_scheme,   0},
     {"log",            1, nif_log,            0},
     {"log",            2, nif_log2,           0},
